@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Премия - GitHub Синхронизация</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e4663 0%, #0f2b3f 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .header {
+            background: linear-gradient(135deg, #1e4663 0%, #0f2b3f 100%);
+            color: white;
+            padding: 20px 30px;
+            border-bottom: 3px solid #ffc107;
+        }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        .header p { margin: 5px 0 0; opacity: 0.9; }
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #2c7da0; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-github { background: #24292f; color: white; }
+        .btn:hover { transform: translateY(-1px); opacity: 0.9; }
+        select { padding: 8px 12px; border-radius: 8px; border: 1px solid #ced4da; }
+        .table-container { padding: 20px 30px; overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
+        th { background: #e9ecef; position: sticky; top: 0; }
+        td[contenteditable="true"] { background: #fffef7; cursor: text; }
+        td[contenteditable="true"]:hover { background: #fff3cd; }
+        .employee-name { background: #f8f9fa; font-weight: 600; text-align: left; }
+        .total-row { background: #e9ecef; font-weight: 700; }
+        .nav-days { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 20px; }
+        .day-btn {
+            padding: 5px 12px;
+            font-size: 12px;
+            background: #f1f3f5;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .day-btn.active { background: #2c7da0; color: white; }
+        .info { padding: 15px 30px; background: #f8f9fa; font-size: 13px; border-top: 1px solid #dee2e6; }
+        .sync-status {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .syncing { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🐙 Премия - GitHub Синхронизация</h1>
+        <p>Автоматическая синхронизация через GitHub Gist • Доступ с любого ПК</p>
+    </div>
+    
+    <div class="controls">
+        <div>
+            <label>📅 Месяц:</label>
+            <select id="monthSelect"></select>
+        </div>
+        <div>
+            <button class="btn btn-primary" id="prevDayBtn">◀ Пред. день</button>
+            <span id="currentDayDisplay" style="font-weight:600; margin:0 10px;"></span>
+            <button class="btn btn-primary" id="nextDayBtn">След. день ▶</button>
+        </div>
+        <div>
+            <button class="btn btn-github" id="syncNowBtn">🔄 Синхронизировать</button>
+            <button class="btn btn-primary" id="showMonthBtn">📊 Итоги месяца</button>
+            <button class="btn btn-success" id="exportBtn">📎 Экспорт CSV</button>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <div id="syncStatus" class="sync-status syncing">⏳ Подключение к GitHub...</div>
+        <div id="dayButtons" class="nav-days"></div>
+        <div id="tableWrapper"></div>
+        <div id="syncInfo" style="font-size:11px; color:#6c757d; text-align:right; margin-top:10px;"></div>
+    </div>
+    
+    <div class="info">
+        <div>✅ <strong>GitHub Синхронизация:</strong> все изменения сохраняются в GitHub Gist и видны на всех устройствах</div>
+        <div>✏️ <strong>Редактирование:</strong> кликните по ячейке → измените число → Enter</div>
+        <div>🔗 <strong>Ссылка:</strong> <span id="pageUrl"></span> — отправьте коллегам</div>
+    </div>
+</div>
+
+<script>
+    // ==================== ВАШИ ДАННЫЕ (ПРАВИЛЬНЫЕ!) ====================
+    const GIST_ID = "08d3d9d906e856462cbb8451165d3f30";
+    const GITHUB_TOKEN = "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";
+    // ====================================================================
+    
+    const EMPLOYEES = [
+        "Астахов Кирилл Дмитриевич", "Балагуров Евгений Александрович",
+        "Горлов Вячеслав Викторович", "Бондар Захар Александрович",
+        "Князькин Сергей Александрович", "Корнилов Кирилл Валерьевич",
+        "Овинников Никита Андреевич", "Строганов Вячеслав Александрович",
+        "Федотова Екатерина Дмитриевна", "Хабаров Дмитрий",
+        "Миронов Андрей", "Галинин Сергей"
+    ];
+    
+    const YEARS = [2026, 2027];
+    
+    let fullData = {};
+    let currentMode = 'day';
+    let currentYear = 2026;
+    let currentMonth = 2;
+    let currentDay = 1;
+    let isSaving = false;
+    
+    async function loadFromGitHub() {
+        updateStatus("syncing", "⏳ Загрузка из GitHub...");
+        
+        try {
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}`);
+            if (!response.ok) throw new Error(`Ошибка ${response.status}`);
+            
+            const gist = await response.json();
+            const content = gist.files["data.json"]?.content || "{}";
+            const data = JSON.parse(content);
+            
+            if (data && Object.keys(data).length > 0) {
+                fullData = data;
+                updateStatus("success", "✅ Данные загружены из GitHub");
+            } else {
+                initData();
+                updateStatus("success", "✅ Создана новая таблица");
+            }
+            updateSyncInfo();
+            refreshDisplay();
+        } catch (error) {
+            updateStatus("error", `❌ Ошибка: ${error.message}`);
+            initData();
+            refreshDisplay();
+        }
+    }
+    
+    async function saveToGitHub() {
+        if (isSaving) return;
+        isSaving = true;
+        updateStatus("syncing", "⏳ Сохранение в GitHub...");
+        
+        try {
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: { "data.json": { content: JSON.stringify(fullData, null, 2) } }
+                })
+            });
+            
+            if (response.ok) {
+                updateStatus("success", "✅ Сохранено в GitHub");
+                updateSyncInfo();
+            } else {
+                const error = await response.json();
+                throw new Error(error.message);
+            }
+        } catch (error) {
+            updateStatus("error", `❌ Ошибка: ${error.message}`);
+        }
+        isSaving = false;
+    }
+    
+    function updateStatus(type, message) {
+        const div = document.getElementById("syncStatus");
+        div.textContent = message;
+        div.className = `sync-status ${type}`;
+        if (type !== "syncing") {
+            setTimeout(() => {
+                if (document.getElementById("syncStatus") === div) {
+                    div.className = "sync-status success";
+                    div.textContent = "✅ Готово";
+                }
+            }, 2000);
+        }
+    }
+    
+    function updateSyncInfo() {
+        document.getElementById("syncInfo").innerHTML = `🕐 Последняя синхронизация: ${new Date().toLocaleTimeString()}`;
+    }
+    
+    function initData() {
+        for (let y of YEARS) {
+            if (!fullData[y]) fullData[y] = {};
+            for (let m = 0; m < 12; m++) {
+                if (!fullData[y][m]) fullData[y][m] = {};
+                const days = new Date(y, m + 1, 0).getDate();
+                for (let d = 1; d <= days; d++) {
+                    if (!fullData[y][m][d]) fullData[y][m][d] = [];
+                    for (let e = 0; e < EMPLOYEES.length; e++) {
+                        if (!fullData[y][m][d][e]) fullData[y][m][d][e] = [0, 0, 0, 0];
+                    }
+                }
+            }
+        }
+    }
+    
+    function getMonthName(m) {
+        return ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'][m];
+    }
+    
+    function getDaysInMonth(y, m) {
+        return new Date(y, m + 1, 0).getDate();
+    }
+    
+    function renderDayTable() {
+        const wrapper = document.getElementById("tableWrapper");
+        const dayData = fullData[currentYear]?.[currentMonth]?.[currentDay];
+        if (!dayData) {
+            wrapper.innerHTML = "<div style='padding:40px;text-align:center;'>Нет данных</div>";
+            return;
+        }
+        
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<th>ФИО</th><th>Плёнки</th><th>Отзывы</th><th>Внешний вид</th><th>Опоздания</th>";
+        thead.appendChild(tr);
+        table.appendChild(thead);
+        
+        const tbody = document.createElement("tbody");
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            const row = document.createElement("tr");
+            const tdName = document.createElement("td");
+            tdName.textContent = EMPLOYEES[i];
+            tdName.className = "employee-name";
+            row.appendChild(tdName);
+            
+            for (let f = 0; f < 4; f++) {
+                const td = document.createElement("td");
+                td.setAttribute("contenteditable", "true");
+                td.textContent = dayData[i][f];
+                td.onblur = async function() {
+                    let val = parseInt(this.textContent) || 0;
+                    if (fullData[currentYear][currentMonth][currentDay][i][f] !== val) {
+                        fullData[currentYear][currentMonth][currentDay][i][f] = val;
+                        await saveToGitHub();
+                        updateDayTotal();
+                    }
+                    this.textContent = val;
+                };
+                row.appendChild(td);
+            }
+            tbody.appendChild(row);
+        }
+        table.appendChild(tbody);
+        
+        const tfoot = document.createElement("tfoot");
+        const totalRow = document.createElement("tr");
+        totalRow.className = "total-row";
+        totalRow.innerHTML = "<td><strong>ИТОГО ЗА ДЕНЬ</strong><\/td>";
+        const totals = [0,0,0,0];
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            for (let f = 0; f < 4; f++) totals[f] += dayData[i][f];
+        }
+        for (let f = 0; f < 4; f++) {
+            const td = document.createElement("td");
+            td.textContent = totals[f];
+            td.style.fontWeight = "bold";
+            totalRow.appendChild(td);
+        }
+        tfoot.appendChild(totalRow);
+        table.appendChild(tfoot);
+        
+        wrapper.innerHTML = "";
+        wrapper.appendChild(table);
+    }
+    
+    function updateDayTotal() {
+        const dayData = fullData[currentYear]?.[currentMonth]?.[currentDay];
+        if (!dayData) return;
+        const totals = [0,0,0,0];
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            for (let f = 0; f < 4; f++) totals[f] += dayData[i][f];
+        }
+        const footer = document.querySelector("tfoot tr");
+        if (footer) {
+            for (let f = 0; f < 4; f++) {
+                if (footer.cells[f+1]) footer.cells[f+1].textContent = totals[f];
+            }
+        }
+    }
+    
+    function renderMonthTotal() {
+        const wrapper = document.getElementById("tableWrapper");
+        const days = getDaysInMonth(currentYear, currentMonth);
+        const totals = Array(EMPLOYEES.length).fill().map(() => [0,0,0,0]);
+        
+        for (let d = 1; d <= days; d++) {
+            const dayData = fullData[currentYear]?.[currentMonth]?.[d];
+            if (dayData) {
+                for (let e = 0; e < EMPLOYEES.length; e++) {
+                    for (let f = 0; f < 4; f++) totals[e][f] += dayData[e][f];
+                }
+            }
+        }
+        
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<th>ФИО</th><th>Плёнки</th><th>Отзывы</th><th>Внешний вид</th><th>Опоздания</th>";
+        thead.appendChild(tr);
+        table.appendChild(thead);
+        
+        const tbody = document.createElement("tbody");
+        let grand = [0,0,0,0];
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            const row = document.createElement("tr");
+            const tdName = document.createElement("td");
+            tdName.textContent = EMPLOYEES[i];
+            tdName.className = "employee-name";
+            row.appendChild(tdName);
+            for (let f = 0; f < 4; f++) {
+                const td = document.createElement("td");
+                td.textContent = totals[i][f];
+                row.appendChild(td);
+                grand[f] += totals[i][f];
+            }
+            tbody.appendChild(row);
+        }
+        table.appendChild(tbody);
+        
+        const tfoot = document.createElement("tfoot");
+        const totalRow = document.createElement("tr");
+        totalRow.className = "total-row";
+        totalRow.innerHTML = "<td><strong>ИТОГО ЗА МЕСЯЦ</strong><\/td>";
+        for (let f = 0; f < 4; f++) {
+            const td = document.createElement("td");
+            td.textContent = grand[f];
+            td.style.fontWeight = "bold";
+            totalRow.appendChild(td);
+        }
+        tfoot.appendChild(totalRow);
+        table.appendChild(tfoot);
+        
+        wrapper.innerHTML = "";
+        wrapper.appendChild(table);
+    }
+    
+    function updateDayButtons() {
+        const container = document.getElementById("dayButtons");
+        const days = getDaysInMonth(currentYear, currentMonth);
+        container.innerHTML = "";
+        for (let d = 1; d <= days; d++) {
+            const btn = document.createElement("button");
+            btn.textContent = d;
+            btn.className = "day-btn";
+            if (currentMode === 'day' && currentDay === d) btn.classList.add("active");
+            btn.onclick = () => {
+                currentDay = d;
+                currentMode = 'day';
+                refreshDisplay();
+            };
+            container.appendChild(btn);
+        }
+    }
+    
+    function populateMonthSelect() {
+        const select = document.getElementById("monthSelect");
+        select.innerHTML = "";
+        for (let y of YEARS) {
+            for (let m = 0; m < 12; m++) {
+                const option = document.createElement("option");
+                option.value = `${y}_${m}`;
+                option.textContent = `${getMonthName(m)} ${y}`;
+                select.appendChild(option);
+            }
+        }
+        select.value = `${currentYear}_${currentMonth}`;
+        select.onchange = (e) => {
+            const [y, m] = e.target.value.split("_").map(Number);
+            currentYear = y;
+            currentMonth = m;
+            currentDay = 1;
+            currentMode = 'day';
+            refreshDisplay();
+        };
+    }
+    
+    function refreshDisplay() {
+        document.getElementById("currentDayDisplay").textContent = 
+            currentMode === 'day' 
+                ? `${currentDay} ${getMonthName(currentMonth)} ${currentYear}`
+                : `📊 ИТОГИ: ${getMonthName(currentMonth)} ${currentYear}`;
+        
+        if (currentMode === 'day') {
+            updateDayButtons();
+            renderDayTable();
+        } else {
+            renderMonthTotal();
+        }
+    }
+    
+    function changeDay(delta) {
+        if (currentMode !== 'day') return;
+        let days = getDaysInMonth(currentYear, currentMonth);
+        let newDay = currentDay + delta;
+        let newMonth = currentMonth;
+        let newYear = currentYear;
+        
+        if (newDay < 1) {
+            newMonth--;
+            if (newMonth < 0) { newMonth = 11; newYear--; }
+            if (newYear < YEARS[0]) newYear = YEARS[0];
+            newDay = getDaysInMonth(newYear, newMonth);
+        } else if (newDay > days) {
+            newMonth++;
+            if (newMonth > 11) { newMonth = 0; newYear++; }
+            if (newYear > YEARS[1]) newYear = YEARS[1];
+            newDay = 1;
+        }
+        
+        currentYear = newYear;
+        currentMonth = newMonth;
+        currentDay = newDay;
+        refreshDisplay();
+    }
+    
+    function exportToCSV() {
+        const days = getDaysInMonth(currentYear, currentMonth);
+        const totals = Array(EMPLOYEES.length).fill().map(() => [0,0,0,0]);
+        for (let d = 1; d <= days; d++) {
+            const dayData = fullData[currentYear]?.[currentMonth]?.[d];
+            if (dayData) {
+                for (let e = 0; e < EMPLOYEES.length; e++) {
+                    for (let f = 0; f < 4; f++) totals[e][f] += dayData[e][f];
+                }
+            }
+        }
+        
+        let csv = "ФИО,Плёнки,Отзывы,Внешний вид,Опоздания\n";
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            csv += `"${EMPLOYEES[i]}",${totals[i][0]},${totals[i][1]},${totals[i][2]},${totals[i][3]}\n`;
+        }
+        const grand = [0,0,0,0];
+        for (let i = 0; i < EMPLOYEES.length; i++) {
+            for (let f = 0; f < 4; f++) grand[f] += totals[i][f];
+        }
+        csv += `"ИТОГО ЗА МЕСЯЦ",${grand[0]},${grand[1]},${grand[2]},${grand[3]}\n`;
+        
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `премия_${getMonthName(currentMonth)}_${currentYear}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+    
+    function showMonthTotal() {
+        currentMode = 'month';
+        refreshDisplay();
+    }
+    
+    function showDayView() {
+        currentMode = 'day';
+        refreshDisplay();
+    }
+    
+    async function syncNow() {
+        await loadFromGitHub();
+        refreshDisplay();
+    }
+    
+    async function init() {
+        document.getElementById("pageUrl").textContent = window.location.href;
+        
+        populateMonthSelect();
+        refreshDisplay();
+        
+        const container = document.querySelector(".controls > div:last-child");
+        const dayBtn = document.createElement("button");
+        dayBtn.className = "btn btn-primary";
+        dayBtn.textContent = "📅 Дневной режим";
+        dayBtn.onclick = showDayView;
+        container.insertBefore(dayBtn, container.children[0]);
+        
+        document.getElementById("prevDayBtn").onclick = () => changeDay(-1);
+        document.getElementById("nextDayBtn").onclick = () => changeDay(1);
+        document.getElementById("showMonthBtn").onclick = showMonthTotal;
+        document.getElementById("exportBtn").onclick = exportToCSV;
+        document.getElementById("syncNowBtn").onclick = syncNow;
+        
+        await loadFromGitHub();
+        
+        setInterval(async () => {
+            if (!isSaving && Object.keys(fullData).length > 0) {
+                await saveToGitHub();
+            }
+        }, 30000);
+        
+        setInterval(async () => {
+            await loadFromGitHub();
+        }, 60000);
+    }
+    
+    init();
+</script>
+</body>
+</html>
