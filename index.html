@@ -124,7 +124,7 @@
 <script>
     // ==================== ВАШИ ДАННЫЕ ====================
     const GIST_ID = "08d3d9d906e856462cbb8451165d3f30";
-    const GITHUB_TOKEN = "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";
+    const GITHUB_TOKEN = "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";
     // ====================================================
     
     const EMPLOYEES = [
@@ -153,15 +153,11 @@
             if (!response.ok) throw new Error(`Ошибка ${response.status}`);
             
             const gist = await response.json();
-            
-            // Проверяем, есть ли файл data.json
             let content = "{}";
+            
             if (gist.files && gist.files["data.json"]) {
                 content = gist.files["data.json"].content;
-            } else if (gist.files && gist.files["data.json"]) {
-                content = gist.files["data.json"].content;
             } else {
-                // Если нет файла, создаём его
                 await createDataFile();
                 content = "{}";
             }
@@ -194,16 +190,11 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    files: {
-                        "data.json": {
-                            content: "{}"
-                        }
-                    }
+                    files: { "data.json": { content: "{}" } }
                 })
             });
             return response.ok;
         } catch (error) {
-            console.error("Ошибка создания файла:", error);
             return false;
         }
     }
@@ -214,11 +205,6 @@
         updateStatus("syncing", "⏳ Сохранение в GitHub...");
         
         try {
-            // Сначала убеждаемся, что fullData не пустая
-            if (Object.keys(fullData).length === 0) {
-                initData();
-            }
-            
             const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                 method: 'PATCH',
                 headers: {
@@ -239,11 +225,10 @@
                 updateSyncInfo();
             } else {
                 const error = await response.text();
-                console.error("Ошибка сохранения:", error);
+                console.error("Ошибка:", error);
                 updateStatus("error", "❌ Ошибка сохранения");
             }
         } catch (error) {
-            console.error("Ошибка:", error);
             updateStatus("error", `❌ ${error.message}`);
         }
         isSaving = false;
@@ -264,7 +249,7 @@
     }
     
     function updateSyncInfo() {
-        document.getElementById("syncInfo").innerHTML = `🕐 Последняя синхронизация: ${new Date().toLocaleTimeString()}`;
+        document.getElementById("syncInfo").innerHTML = `🕐 Синхронизация: ${new Date().toLocaleTimeString()}`;
     }
     
     function initData() {
