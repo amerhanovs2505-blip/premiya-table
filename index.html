@@ -122,10 +122,10 @@
 </div>
 
 <script>
-    // ==================== ВАШИ ДАННЫЕ (ПРАВИЛЬНЫЕ!) ====================
+    // ==================== ВАШИ ДАННЫЕ ====================
     const GIST_ID = "08d3d9d906e856462cbb8451165d3f30";
     const GITHUB_TOKEN = "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";
-    // ====================================================================
+    // ====================================================
     
     const EMPLOYEES = [
         "Астахов Кирилл Дмитриевич", "Балагуров Евгений Александрович",
@@ -153,7 +153,19 @@
             if (!response.ok) throw new Error(`Ошибка ${response.status}`);
             
             const gist = await response.json();
-            const content = gist.files["data.json"]?.content || "{}";
+            
+            // Проверяем, есть ли файл data.json
+            let content = "{}";
+            if (gist.files && gist.files["data.json"]) {
+                content = gist.files["data.json"].content;
+            } else if (gist.files && gist.files["data.json"]) {
+                content = gist.files["data.json"].content;
+            } else {
+                // Если нет файла, создаём его
+                await createDataFile();
+                content = "{}";
+            }
+            
             const data = JSON.parse(content);
             
             if (data && Object.keys(data).length > 0) {
@@ -166,9 +178,33 @@
             updateSyncInfo();
             refreshDisplay();
         } catch (error) {
+            console.error("Ошибка загрузки:", error);
             updateStatus("error", `❌ Ошибка: ${error.message}`);
             initData();
             refreshDisplay();
+        }
+    }
+    
+    async function createDataFile() {
+        try {
+            const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    files: {
+                        "data.json": {
+                            content: "{}"
+                        }
+                    }
+                })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error("Ошибка создания файла:", error);
+            return false;
         }
     }
     
@@ -178,6 +214,11 @@
         updateStatus("syncing", "⏳ Сохранение в GitHub...");
         
         try {
+            // Сначала убеждаемся, что fullData не пустая
+            if (Object.keys(fullData).length === 0) {
+                initData();
+            }
+            
             const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                 method: 'PATCH',
                 headers: {
@@ -185,7 +226,11 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    files: { "data.json": { content: JSON.stringify(fullData, null, 2) } }
+                    files: {
+                        "data.json": {
+                            content: JSON.stringify(fullData, null, 2)
+                        }
+                    }
                 })
             });
             
@@ -193,11 +238,13 @@
                 updateStatus("success", "✅ Сохранено в GitHub");
                 updateSyncInfo();
             } else {
-                const error = await response.json();
-                throw new Error(error.message);
+                const error = await response.text();
+                console.error("Ошибка сохранения:", error);
+                updateStatus("error", "❌ Ошибка сохранения");
             }
         } catch (error) {
-            updateStatus("error", `❌ Ошибка: ${error.message}`);
+            console.error("Ошибка:", error);
+            updateStatus("error", `❌ ${error.message}`);
         }
         isSaving = false;
     }
